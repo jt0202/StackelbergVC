@@ -79,6 +79,6 @@ def solve(path):
 # We encode priceable vertices by negative values. We do not allow
 # any negative weights as these vertices would always be bought.
 #path = [1, 5, -1, 9, 8, -1, 3, 2, 6]
-path = [1, 5, 0, 9, 8, 0, 3, 2, 6]
+path = [1, 5, 5, 9, 8, 3, 3, 2, 6]
 
 solve(path)
