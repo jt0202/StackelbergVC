@@ -2,121 +2,117 @@ import numpy as np
 from scipy.optimize import linprog, milp, LinearConstraint
 from more_itertools import powerset
 
-infinity = 1000
-
+INFINITY = 1000
     
 def canonicalize(weights, edges):
     vertices = sorted(weights)
     mapping = {v: i for i, v in enumerate(vertices)}
     inv_mapping = {v : k for (k, v) in mapping.items()}
     
-    canonical_edges = [
-        [mapping[u] for u in edge]
-        for edge in edges
-    ]
+    canonical_edges = [[mapping[u] for u in edge] for edge in edges]
     canonical_weights = [weights[v] for v in vertices]
 
     return canonical_weights, canonical_edges, mapping, inv_mapping
 
-def findMinVCCost(weights, edges):
-    A = []
-    for e in edges:
-        line = [0]*len(weights)
-        line[e[0]] = 1
-        line[e[1]] = 1
-        A.append(line)
-    A = np.array(A)
-    b = np.array([1]*len(edges))
-    c = np.array(weights)
-    integrality = np.full_like(c, True)
-    constraints = LinearConstraint(A, b)
-
-    res = milp(c=c, constraints=constraints, integrality=integrality)
-
+def vertex_cover_cost(weights, edges):
+    A = np.zeros((len(edges), len(weights)))
+    for row,e in enumerate(edges):
+        A[row, e[0]] = 1
+        A[row, e[1]] = 1
+    res = milp(c=np.array(weights), constraints=LinearConstraint(A, 1, np.inf), integrality=np.full_like(weights, True))
     return res.fun
 
-
-def findOptimalPrices(weights, edges, selection=None):
-    priceableVertices = []
+def find_optimal_prices(weights, edges, selection=None):
+    priceable_vertices = []
     for i in range(len(weights)):
         if weights[i] == 0:
-            priceableVertices.append(i)
+            priceable_vertices.append(i)
 
-    subsets = list(powerset(priceableVertices))
+    subsets = list(powerset(priceable_vertices))
     costs = {}
 
-    for boughtElements in subsets:
-        for x in priceableVertices:
-            if x in boughtElements:
-                continue
-            weights[x] = infinity
-        costs[boughtElements] = findMinVCCost(weights, edges)
-        for x in priceableVertices:
-            weights[x] = 0
-    bestSelection = ()
-    bestPrice = []
-    bestRevenue = -100
+    for bought_elements in subsets:
+        costs[bought_elements] = vertex_cover_cost(
+            [INFINITY if i in priceable_vertices and i not in bought_elements else x for i, x in enumerate(weights)], edges)
+    best_selection = ()
+    best_price = []
+    best_revenue = -100
 
     if selection is None:
         subsets.remove(())
     else:
-        subsets =[selection]
-    for boughtElements in subsets:
+        subsets = [selection]
+    for bought_elements in subsets:
         A = []
         b = []
-        c = [1]*len(boughtElements)
+        for subset in powerset(bought_elements):
+            b.append(costs[subset] - costs[bought_elements])
+            A.append([0 if x in subset else 1 for x in bought_elements])
+        res = linprog(np.array([-1]*len(bought_elements)), np.array(A), np.array(b))
 
-        for subset in powerset(boughtElements):
-            line = [0]*len(boughtElements)
-            for i, x in enumerate(boughtElements):
-                if x not in subset:
-                    line[i] = 1
-            b.append(costs[subset] - costs[boughtElements])
-            A.append(line)
-        c = np.array([-1]*len(boughtElements))
-        A = np.array(A)
-        b = np.array(b)
+        if -res.fun >= best_revenue:
+            best_selection = bought_elements
+            best_price = res.x
+            best_revenue = - res.fun
 
-        res = linprog(c, A, b)
+    return (best_selection, best_price, best_revenue)
 
-        if -res.fun >= bestRevenue:
-            bestSelection = boughtElements
-            bestPrice = res.x
-            bestRevenue = - res.fun
+def solve(weights, edges, selection=None):
+    weights, edges, mapping, inverse_mapping = canonicalize(weights, edges)
 
-    return (bestSelection, bestPrice, bestRevenue)
+    if selection is not None:
+        selection = tuple(mapping[v] for v in selection)
 
-v1 = {
-    0 : 0,
-    1 : 1,
-    2 : 0,
-    3 : 1,
-    4 : 0,
-    5 : 1
+    selection, prices, revenue = find_optimal_prices(
+        weights, edges, selection
+    )
+
+    selection = tuple(inverse_mapping[v] for v in selection)
+
+    return selection, prices, revenue
+
+G1_weights = {
+    0: 0,
+    1: 1,
+    2: 0,
+    3: 1,
+    4: 0,
+    5: 1,
 }
 
-e1 = [[0,1], [1,2], [2, 3], [3, 4], [4, 5], [5, 0]]
+G1_edges = [
+    (0, 1),
+    (1, 2),
+    (2, 3),
+    (3, 4),
+    (4, 5),
+    (5, 0),
+]
 
-v2 = {
-    0 : 0,
-    2 : 0,
-    4 : 0,
-    6 : 2,
-    7 : 2,
-    8 : 2
+
+G2_weights = {
+    0: 0,
+    2: 0,
+    4: 0,
+    6: 2,
+    7: 2,
+    8: 2,
 }
 
-e2 = [[0, 6], [2, 8], [4, 7], [6, 7], [7, 8], [6, 8]]
+G2_edges = [
+    (0, 6),
+    (2, 8),
+    (4, 7),
+    (6, 7),
+    (7, 8),
+    (6, 8),
+]
 
-weights, edges, _, inv_mapping = canonicalize({**v1, **v2}, e1 + e2)
-selection, prizes, revenue = findOptimalPrices(weights, edges)
-selection = [inv_mapping[x] for x in selection]
-print((selection, prizes, revenue))
+combined_weights = {**G1_weights, **G2_weights}
+combined_edges = G1_edges + G2_edges
 
-weights, edges, mapping, _ = canonicalize(v1, e1)
-_, prizes, revenue = findOptimalPrices(weights, edges, tuple([mapping[x] for x in selection]))
-print((selection, prizes, revenue))
+selection, prices, revenue = solve(combined_weights, combined_edges)
 
-weights, edges, mapping, _ = canonicalize(v2, e2)
-_, prizes, revenue = findOptimalPrices(weights, edges, tuple([mapping[x] for x in selection]))
-print((selection, prizes, revenue))
+print("Combined:", selection, prices, revenue)
+print("G1:", solve(G1_weights, G1_edges, selection))
+print("G2:", solve(G2_weights, G2_edges, selection))
