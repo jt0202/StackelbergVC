@@ -2,8 +2,13 @@ import numpy as np
 from scipy.optimize import linprog, milp, LinearConstraint
 from more_itertools import powerset
 
+# Should be higher than the sum of weights of all neighbors
+# for any priceable vertex
 INFINITY = 1000
-    
+
+# Transform the graph so that the priceable vertices (which are identified by weight 0)
+# occur always at the start. This is assumed for the later algorithms to work.
+# Additionally functions to transform the graph into the new format and out of it are provided.
 def canonicalize(weights, edges):
     vertices = sorted(weights)
     mapping = {v: i for i, v in enumerate(vertices)}
@@ -14,6 +19,7 @@ def canonicalize(weights, edges):
 
     return canonical_weights, canonical_edges, mapping, inv_mapping
 
+# Find the minimum weight vertex cover for a general graph with an ILP approach.
 def vertex_cover_cost(weights, edges):
     A = np.zeros((len(edges), len(weights)))
     for row,e in enumerate(edges):
@@ -22,6 +28,8 @@ def vertex_cover_cost(weights, edges):
     res = milp(c=np.array(weights), constraints=LinearConstraint(A, 1, np.inf), integrality=np.full_like(weights, True))
     return res.fun
 
+# Creates the large LP to compute the optimal prices. If a specific selection is given, then
+# the optimal prices when selling exactly the selection are computed.
 def find_optimal_prices(weights, edges, selection=None):
     priceable_vertices = []
     for i in range(len(weights)):
