@@ -6,6 +6,18 @@ from more_itertools import powerset
 # for any priceable vertex
 INFINITY = 1000
 
+# Joins a list of dictionaries with values by summing values associated with the same key
+# We don't use Counter because we want to keep zero elements
+def joinDicts(l):
+    res = {}
+    for d in l:
+        for k, v in d.items():
+            if k in res:
+                res[k] += v
+            else:
+                res[k] = v
+    return res
+
 # Transform the graph so that the priceable vertices (which are identified by weight 0)
 # occur always at the start. This is assumed for the later algorithms to work.
 # Additionally functions to transform the graph into the new format and out of it are provided.
@@ -116,7 +128,7 @@ G2_edges = [
     (6, 8),
 ]
 
-combined_weights = {**G1_weights, **G2_weights}
+combined_weights = joinDicts([G1_weights, G2_weights])
 combined_edges = G1_edges + G2_edges
 
 selection, prices, revenue = solve(combined_weights, combined_edges)
